@@ -3,6 +3,7 @@ from robocorp import browser
 
 from RPA.HTTP import HTTP
 from RPA.Tables import Tables
+from RPA.PDF import PDF
 
 @task
 def order_robots_from_RobotSpareBin():
@@ -15,13 +16,9 @@ def order_robots_from_RobotSpareBin():
     """
     browser.configure(slowmo=100,)
     open_robot_order_website()
-    close_annoying_popup()
     orders = get_orders()
     loop_the_orders(orders)
 
-
-    # orders = get_orders()
-    # loop_the_orders(orders)
 
 def open_robot_order_website():
     """ Opens the RobotSpareBin Industries Inc. website. """
@@ -38,9 +35,12 @@ def get_orders():
 def loop_the_orders(orders):
     """ Loops through the orders and processes them """
     for order in orders:
+        close_annoying_popup()
         fill_the_form(order)
         preview_the_robot()
-        submit_the_order()    
+        order_number = submit_the_order()
+        store_receipt_as_pdf(order_number)
+        order_another_robot()
 
 def close_annoying_popup():
     """ Closes the annoying popup that appears on the website """
@@ -59,14 +59,31 @@ def preview_the_robot():
     """ Takes a screenshot of the robot """
     page = browser.page()
     page.click("text=preview")
-    # browser.screenshot("robot.png")
+
 
 def submit_the_order():
-    """ Submits the order form """
+    """Clicks submit order and waits for the success message to appear"""
     page = browser.page()
-    while True:
+    for _ in range(5):  # Retry up to 5 times
         try:
-            page.click("text=order")
-            break
-        except:
-            print("Failed to submit order, trying again...")
+            page.click("#order")
+            page.wait_for_selector(
+                "#order-completion", timeout=2000
+            ) 
+            return page.query_selector(".badge.badge-success").inner_text()
+        except Exception:
+            print("Order completion element did not appear, retrying...")
+    raise Exception("Failed to submit order after 5 attempts")
+
+
+def store_receipt_as_pdf(order_number):
+    """ Stores the order receipt as a PDF file """
+    page = browser.page()
+    receipt_html = page.locator("#order-completion").inner_html()
+    pdf = PDF()
+    pdf.html_to_pdf(receipt_html, f"output/receipts/receipt{order_number}.pdf")
+
+def order_another_robot():
+    """ Clicks to order the next robot """
+    page = browser.page()
+    page.click("text=Order another robot")
